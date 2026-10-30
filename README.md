@@ -34,12 +34,13 @@ Regras baseadas em event_id/provedor/texto:
 - **PowerShell suspeito:** evento 4104 contendo `downloadstring`, `invoke-expression`, `encodedcommand`, `frombase64string`
 - Regras editáveis pelo usuário (severidade, habilitar/desabilitar) na aba de configurações
 
-### Interface (5 abas)
-1. **Alertas** — com filtros e paginação
-2. **Eventos coletados** — com filtros e paginação
-3. **Status do sistema**
-4. **Histórico** — com terminal lateral
-5. **Sobre / Configurações**
+### Interface (6 abas)
+- **Início** — visão rápida dos componentes de segurança e alertas ativos, com leitura individual de alerta
+- **Alertas importantes** — consulta completa com filtros, paginação e histórico de estados
+- **Eventos coletados** — com filtros e paginação
+- **Status do sistema** — tabela completa dos componentes
+- **Histórico** — com terminal lateral
+- **Sobre / Configurações**
 
 Monitoramento periódico com countdown, system tray, atalhos de teclado (F5 coletar, F6 monitorar, Ctrl+1..5 trocar de aba).
 
@@ -61,5 +62,8 @@ python windows_security_audit_console.py
 ├── LICENSE
 ├── README.md
 ├── windows_security_audit_console.py
-└── windows_security_audit.sqlite3
+├── windows_security_audit.sqlite3
+└── ui/
+    ├── icons.py
+    └── theme.py
 ```

@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="960" viewBox="0 0 1280 960" role="img" aria-labelledby="title desc">
+<title id="title">WSAC — mascote minimalista, estudo de contorno e expressão</title>
+<desc id="desc">Cinco expressões do mesmo robô, desenhado somente com um contorno externo e traços faciais, sem acessórios ou preenchimentos.</desc>
+<defs>
+  <g id="head" fill="none" stroke="#9ED8D0" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 10 H132 C144 10 150 16 150 28 V106 C150 118 144 124 132 124 H48 C36 124 30 118 30 106 V28 C30 16 36 10 48 10 Z"/>
+  </g>
+  <style>
+    .title{font:700 28px 'Segoe UI',sans-serif;fill:#E8F0F4;letter-spacing:.5px}
+    .sub{font:400 15px 'Segoe UI',sans-serif;fill:#A7B8BC}
+    .label{font:700 16px 'Segoe UI',sans-serif;fill:#EAF2F3;letter-spacing:1.1px}
+    .detail{font:400 13px 'Segoe UI',sans-serif;fill:#9FB0B4}
+    .face{fill:none;stroke:#9ED8D0;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+    .card{fill:#101A19;stroke:#2D403D;stroke-width:1.5}
+  </style>
+</defs>
+<rect width="1280" height="960" fill="#080F0E"/>
+<text class="title" x="44" y="58">WSAC  /  PET — CONTORNO + EXPRESSÃO</text>
+<text class="sub" x="44" y="88">Contorno de robô simples. O rosto concentra toda a personalidade.</text>
+<text class="sub" x="44" y="121">Sem placas, emblemas, visor, textura, preenchimento, acessórios ou sinais de estado no personagem.</text>
+<path d="M44 148 H1236" stroke="#2D403D"/>
+<!-- calm -->
+<g transform="translate(32 180)"><rect class="card" width="390" height="322" rx="16"/>
+  <g transform="translate(103 20)"><use href="#head"/>
+    <path class="face" d="M47 78 Q62 71 78 78 M122 78 Q138 71 153 78"/>
+    <path class="face" d="M51 94 Q63 87 76 94 M124 94 Q137 87 149 94"/>
+    <path class="face" d="M82 118 Q100 123 118 118"/>
+  </g>
+  <text class="label" x="24" y="237">CALMO</text><text class="detail" x="24" y="265">Olhar sereno; boca quase neutra.</text>
+</g>
+<!-- scan -->
+<g transform="translate(445 180)"><rect class="card" width="390" height="322" rx="16"/>
+  <g transform="translate(103 20)"><use href="#head"/>
+    <path class="face" d="M48 78 Q63 71 78 78 M122 78 Q138 71 153 78"/>
+    <path class="face" d="M51 94 Q63 91 76 94 M124 94 Q137 91 149 94"/>
+    <path class="face" d="M86 119 H114"/>
+  </g>
+  <text class="label" x="24" y="237">FOCADO</text><text class="detail" x="24" y="265">Olhar estreito; acompanha a coleta.</text>
+</g>
+<!-- attention -->
+<g transform="translate(858 180)"><rect class="card" width="390" height="322" rx="16"/>
+  <g transform="translate(103 20)"><use href="#head"/>
+    <path class="face" d="M47 75 Q62 64 78 72 M122 78 Q138 70 153 75"/>
+    <path class="face" d="M51 94 Q63 83 76 94 M124 94 Q137 83 149 94"/>
+    <path class="face" d="M84 119 Q100 115 116 119"/>
+  </g>
+  <text class="label" x="24" y="237">ATENTO</text><text class="detail" x="24" y="265">Olhos abertos; sobrancelha erguida.</text>
+</g>
+<!-- critical -->
+<g transform="translate(238 535)"><rect class="card" width="390" height="322" rx="16"/>
+  <g transform="translate(103 20)"><use href="#head"/>
+    <path class="face" d="M47 73 Q63 80 78 82 M122 82 Q138 80 153 73"/>
+    <path class="face" d="M51 94 Q63 90 76 94 M124 94 Q137 90 149 94"/>
+    <path class="face" d="M84 121 H116"/>
+  </g>
+  <text class="label" x="24" y="237">SÉRIO</text><text class="detail" x="24" y="265">Foco firme; sem expressão agressiva.</text>
+</g>
+<!-- partial -->
+<g transform="translate(651 535)"><rect class="card" width="390" height="322" rx="16"/>
+  <g transform="translate(103 20)"><use href="#head"/>
+    <path class="face" d="M47 75 Q62 68 78 76 M122 77 Q138 74 153 78"/>
+    <path class="face" d="M51 94 Q63 89 76 94 M124 94 Q137 86 149 94"/>
+    <path class="face" d="M86 120 Q100 116 114 120"/>
+  </g>
+  <text class="label" x="24" y="237">INCERTO</text><text class="detail" x="24" y="265">Expressão contida; estado vem em texto.</text>
+</g>
+<text class="sub" x="44" y="906">Uma cor e um peso de traço no pet. Severidade, coleta e saúde dos componentes aparecem nos rótulos do WSAC.</text>
+<text class="sub" x="44" y="934">ESTUDO DE DIREÇÃO · conferir legibilidade em 16, 24 e 32 px e ajustar os traços para cada tamanho.</text>
+</svg>
+

@@ -17,15 +17,17 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QDateTime, QEvent, QObject, QRect, QThread, QTimer, Qt, Signal, Slot
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QKeySequence, QPainter, QPalette, QPen, QPixmap, QShortcut
+from PySide6.QtCore import QDateTime, QEvent, QObject, QThread, QTimer, Qt, Signal, Slot
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QKeySequence, QPainter, QPainterPath, QPalette, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDateTimeEdit, QFormLayout, QFrame,
+    QApplication, QCheckBox, QComboBox, QDateTimeEdit, QFormLayout, QFrame, QGridLayout,
     QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
     QMenu, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QSpinBox,
     QSplitter, QSystemTrayIcon, QTableWidget, QTableWidgetItem, QTabWidget,
     QVBoxLayout, QWidget,
 )
+from ui.theme import STYLE, apply_palette
+from ui.icons import icon as font_icon, status_icon
 
 APP_NAME = "Windows Security Audit Console"
 APP_VERSION = "1.8.0"
@@ -41,35 +43,6 @@ CATEGORY_RETENTION_DAYS = {
     "SENSE Operational": 30,
 }
 DEFAULT_EVENT_RETENTION_DAYS = 7
-
-STYLE = """
-QWidget { background:#050805; color:#c4f7c4; font-family:"Cascadia Mono","Consolas",monospace; font-size:10pt; }
-QMainWindow { background:#050805; }
-QFrame#toolbar,QFrame#footer,QFrame#signalBox { background:#071007; border:1px solid #285b28; }
-QPushButton,QSpinBox,QComboBox,QLineEdit,QDateTimeEdit { background:#091309; color:#d8ffd8; border:1px solid #397d39; padding:6px 9px; }
-QPushButton:hover,QComboBox:hover,QLineEdit:hover,QDateTimeEdit:hover { background:#122812; border-color:#72cf72; }
-QPushButton:disabled { color:#496249; border-color:#203920; }
-QPushButton#primary { background:#123812; font-weight:700; }
-QTabWidget::pane { border:1px solid #285b28; background:#030603; }
-QTabBar::tab { background:#071007; color:#79ad79; border:1px solid #285b28; padding:8px 14px; }
-QTabBar::tab:selected { background:#173617; color:#fff; }
-QPlainTextEdit,QTableWidget,QListWidget { background:#020402; color:#c4f7c4; border:0; selection-background-color:#203f20; selection-color:#fff; }
-QListWidget::item { padding:7px; border-bottom:1px solid #173617; }
-QListWidget::item:selected { background:#1d4a1d; color:#ffffff; }
-QTableWidget { gridline-color:#214721; alternate-background-color:#071007; }
-QTableWidget::item { padding:6px; border-bottom:1px solid #173617; }
-QHeaderView::section { background:#102410; color:#d8ffd8; border:0; border-right:1px solid #285b28; border-bottom:1px solid #397d39; padding:7px; font-weight:700; }
-QSplitter::handle { background:#285b28; width:1px; }
-QLabel#signal { font-weight:700; padding:4px 8px; }
-QLabel#footerText { color:#8bc68b; padding:2px; }
-QLabel#footerAuthor { color:#85a985; padding:2px; font-style:italic; }
-QGroupBox { border:1px solid #285b28; margin-top:12px; padding:12px 8px 8px 8px; color:#9ed89e; }
-QGroupBox::title { subcontrol-origin:margin; left:8px; padding:0 5px; }
-QProgressBar { background:#020402; border:1px solid #285b28; height:8px; color:transparent; }
-QProgressBar::chunk { background:#72cf72; }
-QScrollBar:vertical,QScrollBar:horizontal { background:#050805; border:0; }
-QScrollBar::handle { background:#285b28; min-height:24px; min-width:24px; }
-"""
 
 LOGS = [
     ("Microsoft-Windows-Windows Defender/Operational", "Defender"),
@@ -639,6 +612,7 @@ class MainWindow(QMainWindow):
         self._tray_notice_shown = False
         self.alert_page = self.event_page = 1
         self._alerts, self._events = [], []
+        self._home_alerts = []
         self.setWindowTitle(APP_NAME)
         self.resize(1440, 860); self.setMinimumSize(1080, 680)
         self.build_ui(); self.setup_tray(); self.refresh_all(); self.set_signal(*self.db.alert_mood()); self.log_terminal(f"{APP_NAME} {APP_VERSION} iniciado.", "SISTEMA")
@@ -648,23 +622,24 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(); root.setContentsMargins(10, 10, 10, 8); root.setSpacing(8)
         central = QWidget(); central.setLayout(root); self.setCentralWidget(central)
         toolbar = QFrame(objectName="toolbar"); row = QHBoxLayout(toolbar); row.setContentsMargins(8, 6, 8, 6)
-        self.run_btn = QPushButton("[ F5 ] COLETAR AGORA", objectName="primary"); self.run_btn.clicked.connect(self.start_collection); row.addWidget(self.run_btn)
+        self.run_btn = QPushButton("[ F5 ] COLETAR HISTÓRICO", objectName="primary"); self.run_btn.setIcon(font_icon("collect")); self.run_btn.clicked.connect(self.start_collection); row.addWidget(self.run_btn)
         self.monitor_btn = QPushButton("[ F6 ] INICIAR MONITORAMENTO"); self.monitor_btn.clicked.connect(self.toggle_monitor); row.addWidget(self.monitor_btn)
         row.addStretch()
         signal_box = QFrame(objectName="signalBox"); signal_row = QHBoxLayout(signal_box); signal_row.setContentsMargins(5, 2, 5, 2)
         self.signal_dot = QLabel(); self.signal_text = QLabel(objectName="signal"); signal_row.addWidget(self.signal_dot); signal_row.addWidget(self.signal_text); row.addWidget(signal_box)
         root.addWidget(toolbar)
         self.tabs = QTabWidget(); root.addWidget(self.tabs, 1)
-        self.alert_table, self.alert_view, alerts_tab = self.make_alerts_tab(); self.tabs.addTab(alerts_tab, "01 ALERTAS IMPORTANTES  [Ctrl+1]")
-        self.event_table, self.event_view, events_tab = self.make_events_tab(); self.tabs.addTab(events_tab, "02 EVENTOS COLETADOS  [Ctrl+2]")
-        self.status_table = self.make_table(["SINAL", "COMPONENTE", "ESTADO", "ÚLTIMA LEITURA", "DETALHES"], [70, 250, 120, 170, 500]); self.tabs.addTab(self.status_table, "03 STATUS DO SISTEMA  [Ctrl+3]")
+        self.home_page = self.make_home_tab(); self.tabs.addTab(self.home_page, "INÍCIO  [Ctrl+1]"); self.tabs.setTabIcon(0, font_icon("home"))
+        self.alert_table, self.alert_view, alerts_tab = self.make_alerts_tab(); self.tabs.addTab(alerts_tab, "ALERTAS IMPORTANTES  [Ctrl+2]"); self.tabs.setTabIcon(1, font_icon("alerts"))
+        self.event_table, self.event_view, events_tab = self.make_events_tab(); self.tabs.addTab(events_tab, "EVENTOS COLETADOS  [Ctrl+3]"); self.tabs.setTabIcon(2, font_icon("events"))
+        self.status_table = self.make_table(["SINAL", "COMPONENTE", "ESTADO", "ÚLTIMA LEITURA", "DETALHES"], [70, 250, 120, 170, 500]); self.tabs.addTab(self.status_table, "STATUS DO SISTEMA  [Ctrl+4]"); self.tabs.setTabIcon(3, font_icon("status"))
         self.history_table = self.make_table(["DATA/HORA", "COMPONENTE", "ESTADO ANTERIOR", "ESTADO ATUAL", "DETALHES"], [170, 245, 150, 150, 500])
         history_tab = QWidget(); history_layout = QHBoxLayout(history_tab); history_layout.setContentsMargins(0, 0, 0, 0)
         history_split = QSplitter(Qt.Horizontal); history_split.addWidget(self.history_table)
         self.software_terminal = QPlainTextEdit(); self.software_terminal.setReadOnly(True); self.software_terminal.setMaximumBlockCount(1500); self.software_terminal.setLineWrapMode(QPlainTextEdit.WidgetWidth); self.software_terminal.setMinimumWidth(290)
         history_split.addWidget(self.software_terminal); history_split.setSizes([1030, 370]); history_layout.addWidget(history_split)
-        self.tabs.addTab(history_tab, "04 HISTÓRICO  [Ctrl+4]")
-        self.tabs.addTab(self.make_settings_tab(), "05 SOBRE / CONFIGURAÇÕES  [Ctrl+5]")
+        self.tabs.addTab(history_tab, "HISTÓRICO  [Ctrl+5]"); self.tabs.setTabIcon(4, font_icon("history"))
+        self.tabs.addTab(self.make_settings_tab(), "SOBRE / CONFIGURAÇÕES  [Ctrl+6]"); self.tabs.setTabIcon(5, font_icon("settings"))
         footer = QFrame(objectName="footer"); footer_row = QHBoxLayout(footer); footer_row.setContentsMargins(8, 4, 8, 4)
         self.footer = QLabel(f"PRONTO | BANCO: {self.db.path.name}", objectName="footerText"); footer_row.addWidget(self.footer); footer_row.addStretch()
         self.countdown_bar = QProgressBar(); self.countdown_bar.setRange(0, 1000); self.countdown_bar.setFixedWidth(120); self.countdown_bar.setToolTip("Tempo restante para a próxima coleta"); footer_row.addWidget(self.countdown_bar)
@@ -674,6 +649,93 @@ class MainWindow(QMainWindow):
         self.event_sections.currentItemChanged.connect(lambda current, _previous: self.section_changed("events", current))
         self.alert_sections.currentItemChanged.connect(lambda current, _previous: self.section_changed("alerts", current))
         self.install_tab_shortcuts()
+
+    def make_home_tab(self):
+        page = QWidget(); layout = QVBoxLayout(page); layout.setContentsMargins(8, 8, 8, 8); layout.setSpacing(10)
+        self.home_status_grid = QGridLayout(); self.home_status_grid.setSpacing(8)
+        status_box = QFrame(objectName="toolbar"); status_layout = QVBoxLayout(status_box)
+        status_layout.addWidget(QLabel("STATUS DE SEGURANÇA")); status_layout.addLayout(self.home_status_grid)
+        layout.addWidget(status_box)
+
+        alerts_box = QFrame(objectName="toolbar"); alerts_layout = QVBoxLayout(alerts_box)
+        alerts_layout.addWidget(QLabel("ALERTAS ATIVOS"))
+        alert_split = QSplitter(Qt.Horizontal)
+        self.home_alert_list = QListWidget(); self.home_alert_list.setMinimumWidth(300)
+        self.home_alert_detail = QPlainTextEdit(); self.home_alert_detail.setReadOnly(True)
+        alert_split.addWidget(self.home_alert_list); alert_split.addWidget(self.home_alert_detail); alert_split.setSizes([420, 900])
+        alerts_layout.addWidget(alert_split, 1)
+        action_row = QHBoxLayout(); action_row.addStretch()
+        self.home_mark_read = QPushButton("MARCAR ALERTA COMO LIDO")
+        self.home_mark_read.setIcon(font_icon("status"))
+        self.home_mark_read.clicked.connect(self.mark_home_alert_read)
+        action_row.addWidget(self.home_mark_read); alerts_layout.addLayout(action_row)
+        layout.addWidget(alerts_box, 1)
+        self.home_alert_list.currentRowChanged.connect(self.show_home_alert)
+        return page
+
+    def show_home_alert(self, index: int):
+        if not 0 <= index < len(self._home_alerts):
+            self.home_alert_detail.clear(); self.home_mark_read.setEnabled(False); return
+        record = self._home_alerts[index]
+        self.home_alert_detail.setPlainText(
+            f"{record['title']}\n\n"
+            f"Severidade: {record['severity']}\n"
+            f"Categoria: {record['category']}\n"
+            f"Quando: {display_datetime(record['created_at'])}\n"
+            f"Estado: {record['state']}\n\n"
+            f"O que aconteceu:\n{record['details']}"
+        )
+        self.home_mark_read.setEnabled(record["state"] in {"novo", "reconhecido"})
+
+    def mark_home_alert_read(self):
+        index = self.home_alert_list.currentRow()
+        if not 0 <= index < len(self._home_alerts): return
+        self.db.update_alert_state(int(self._home_alerts[index]["id"]), "resolvido")
+        self.refresh_all(); self.set_signal(*self.db.alert_mood())
+
+    def refresh_home(self):
+        statuses = self.db.current_status()
+        while self.home_status_grid.count():
+            item = self.home_status_grid.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+        for index, record in enumerate(statuses):
+            component = str(record["component"])
+            state = str(record["state"] or "Indisponível")
+            low = state.casefold()
+            if low in {"inativo", "stopped", "parado", "disabled", "desativado", "false"}:
+                color = "#FB7185"
+            elif low in {"não encontrado", "indisponível", "unknown", "ausente"}:
+                color = "#FBBF24"
+            elif low == "disponível":
+                color = "#22D3EE"
+            else:
+                color = "#60A5FA"
+            card = QFrame(objectName="statusCard")
+            card.setStyleSheet(f"QFrame#statusCard {{ background:#131E1C; border:1px solid {color}; border-left:5px solid {color}; border-radius:6px; }}")
+            card_layout = QVBoxLayout(card); card_layout.setContentsMargins(12, 10, 12, 10)
+            heading = QHBoxLayout()
+            glyph = QLabel(); glyph.setPixmap(font_icon(status_icon(component), color, 19).pixmap(24, 24))
+            title = QLabel(component); title.setStyleSheet(f"font-weight:700; color:{color};")
+            heading.addWidget(glyph); heading.addWidget(title, 1); card_layout.addLayout(heading)
+            state_label = QLabel(state.upper()); state_label.setStyleSheet(f"font-size:12pt; font-weight:700; color:{color};")
+            detail = QLabel(record["details"] or display_datetime(record["observed_at"])); detail.setWordWrap(True)
+            card_layout.addWidget(state_label); card_layout.addWidget(detail)
+            self.home_status_grid.addWidget(card, index // 4, index % 4)
+
+        fresh, _ = self.db.query_alerts({"state": "novo"}, 1, 100)
+        acknowledged, _ = self.db.query_alerts({"state": "reconhecido"}, 1, 100)
+        self._home_alerts = sorted([*fresh, *acknowledged], key=lambda row: row["created_at"], reverse=True)[:12]
+        selected_id = None
+        current = self.home_alert_list.currentRow()
+        if 0 <= current < len(self._home_alerts): selected_id = int(self._home_alerts[current]["id"])
+        self.home_alert_list.blockSignals(True); self.home_alert_list.clear()
+        for record in self._home_alerts:
+            symbol, _color, severity = self.level_style(record["severity"])
+            self.home_alert_list.addItem(f"{symbol} {severity}  |  {record['title']}  |  {display_datetime(record['created_at'])}")
+        self.home_alert_list.blockSignals(False)
+        target = next((i for i, row in enumerate(self._home_alerts) if int(row["id"]) == selected_id), 0 if self._home_alerts else -1)
+        self.home_alert_list.setCurrentRow(target)
+        if not self._home_alerts: self.home_alert_detail.setPlainText("Nenhum alerta ativo no momento.")
 
     @staticmethod
     def make_table(headers, widths):
@@ -703,9 +765,9 @@ class MainWindow(QMainWindow):
         controls["period"].currentTextChanged.connect(lambda value: controls["since"].setVisible(value == "PERSONALIZADO"))
         for control in controls.values(): row.addWidget(control)
         kind = "alerts" if alert else "events"
-        apply_button = QPushButton("[ FILTRAR ]"); apply_button.clicked.connect(lambda: self.apply_filters(kind)); row.addWidget(apply_button)
+        apply_button = QPushButton("[ FILTRAR ]"); apply_button.setIcon(font_icon("search")); apply_button.clicked.connect(lambda: self.apply_filters(kind)); row.addWidget(apply_button)
         controls["text"].returnPressed.connect(lambda: self.apply_filters(kind)); controls["event_id"].returnPressed.connect(lambda: self.apply_filters(kind)); controls["provider"].returnPressed.connect(lambda: self.apply_filters(kind))
-        clear_button = QPushButton("[ LIMPAR ]"); clear_button.clicked.connect(lambda: self.clear_filters(kind)); row.addWidget(clear_button)
+        clear_button = QPushButton("[ LIMPAR ]"); clear_button.setIcon(font_icon("clear")); clear_button.clicked.connect(lambda: self.clear_filters(kind)); row.addWidget(clear_button)
         return frame, controls
 
     def make_pager(self, kind: str):
@@ -728,9 +790,9 @@ class MainWindow(QMainWindow):
         split.addWidget(self.alert_sections); split.addWidget(self.alert_view); split.setSizes([280, 1120]); layout.addWidget(split, 1)
         actions = QFrame(objectName="toolbar"); action_row = QHBoxLayout(actions); action_row.setContentsMargins(6, 4, 6, 4)
         action_row.addWidget(QLabel("CATEGORIA SELECIONADA:"))
-        read_button = QPushButton("[ MARCAR COMO LIDOS ]"); read_button.clicked.connect(lambda: self.set_selected_alert_state("resolvido")); action_row.addWidget(read_button)
-        ignore_button = QPushButton("[ IGNORAR ]"); ignore_button.clicked.connect(lambda: self.set_selected_alert_state("ignorado")); action_row.addWidget(ignore_button)
-        remove_button = QPushButton("[ REMOVER ]"); remove_button.clicked.connect(self.remove_selected_alerts); action_row.addWidget(remove_button)
+        read_button = QPushButton("[ MARCAR COMO LIDOS ]"); read_button.setIcon(font_icon("status")); read_button.clicked.connect(lambda: self.set_selected_alert_state("resolvido")); action_row.addWidget(read_button)
+        ignore_button = QPushButton("[ IGNORAR ]"); ignore_button.setIcon(font_icon("alerts", "#FBBF24")); ignore_button.clicked.connect(lambda: self.set_selected_alert_state("ignorado")); action_row.addWidget(ignore_button)
+        remove_button = QPushButton("[ REMOVER ]"); remove_button.setIcon(font_icon("delete", "#FB7185")); remove_button.clicked.connect(self.remove_selected_alerts); action_row.addWidget(remove_button)
         action_row.addStretch(); layout.addWidget(actions)
         pager, self.alert_page_label, self.alert_prev, self.alert_next = self.make_pager("alerts"); layout.addWidget(pager)
         return self.alert_sections, self.alert_view, tab
@@ -774,33 +836,60 @@ class MainWindow(QMainWindow):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{index + 1}"), self); shortcut.activated.connect(lambda i=index: self.tabs.setCurrentIndex(i)); setattr(self, f"_tab_shortcut_{index}", shortcut)
 
     @staticmethod
-    def make_robot_icon(color: str, mood: str = "gray") -> QIcon:
-        pixmap = QPixmap(128, 128); pixmap.fill(Qt.transparent)
-        painter = QPainter(pixmap); painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor("#d7ffd7"), 7)); painter.setBrush(QColor("#071007"))
-        painter.drawRoundedRect(QRect(5, 18, 118, 105), 15, 15)
-        painter.drawLine(64, 18, 64, 5); painter.drawEllipse(57, 1, 14, 14)
-        painter.setBrush(QColor(color)); painter.setPen(Qt.NoPen)
-        eye_y = 51 if mood == "red" else 46
-        painter.drawEllipse(28, eye_y, 18, 18); painter.drawEllipse(82, eye_y, 18, 18)
-        painter.setPen(QPen(QColor(color), 7))
-        if mood == "green": painter.drawArc(QRect(35, 69, 58, 36), 200 * 16, 140 * 16)
-        elif mood == "red": painter.drawLine(35, 104, 93, 81)
-        elif mood == "yellow":
-            painter.drawLine(35, 88, 93, 88); painter.drawLine(26, 35, 44, 43); painter.drawLine(102, 35, 84, 43)
-        elif mood == "blue": painter.drawEllipse(53, 77, 22, 22)
-        else: painter.drawLine(38, 88, 90, 88)
-        painter.end(); return QIcon(pixmap)
+    def make_security_icon(state: str = "green") -> QIcon:
+        sprite = QPixmap(128, 128); sprite.fill(Qt.transparent)
+        painter = QPainter(sprite); painter.setRenderHint(QPainter.Antialiasing)
+        palette = {"red": "#FB7185", "yellow": "#FBBF24", "blue": "#22D3EE", "green": "#4ADE80", "gray": "#94A3B8"}
+        accent = QColor(palette.get(state, palette["green"]))
+        painter.setPen(Qt.NoPen)
+
+        if state == "red":
+            # A hot flame silhouette sits behind a simple upright sword.
+            flame = QPainterPath(); flame.moveTo(64, 116)
+            flame.cubicTo(36, 105, 20, 89, 25, 69); flame.cubicTo(28, 57, 40, 51, 37, 37)
+            flame.cubicTo(50, 42, 55, 53, 54, 63); flame.cubicTo(63, 49, 66, 32, 63, 14)
+            flame.cubicTo(82, 30, 79, 47, 77, 60); flame.cubicTo(84, 50, 93, 45, 102, 43)
+            flame.cubicTo(96, 60, 106, 68, 103, 84); flame.cubicTo(100, 101, 84, 111, 64, 116)
+            flame.closeSubpath(); painter.setBrush(QColor("#F97316")); painter.drawPath(flame)
+
+            core = QPainterPath(); core.moveTo(64, 105)
+            core.cubicTo(48, 97, 39, 87, 44, 72); core.cubicTo(50, 77, 54, 84, 56, 91)
+            core.cubicTo(56, 74, 66, 59, 66, 47); core.cubicTo(79, 62, 75, 77, 81, 87)
+            core.cubicTo(85, 81, 89, 76, 92, 73); core.cubicTo(94, 88, 83, 101, 64, 105)
+            core.closeSubpath(); painter.setBrush(QColor("#FBBF24")); painter.drawPath(core)
+
+            blade = QPainterPath(); blade.moveTo(64, 13); blade.lineTo(79, 69); blade.lineTo(64, 62); blade.lineTo(49, 69); blade.closeSubpath()
+            painter.setBrush(QColor("#E2E8F0")); painter.drawPath(blade)
+            highlight = QPainterPath(); highlight.moveTo(64, 22); highlight.lineTo(66, 63); highlight.lineTo(58, 66); highlight.closeSubpath()
+            painter.setBrush(QColor("#FFFFFF")); painter.drawPath(highlight)
+
+            guard = QPainterPath(); guard.moveTo(43, 68); guard.lineTo(63, 76); guard.lineTo(85, 68)
+            guard.lineTo(92, 75); guard.lineTo(65, 84); guard.lineTo(37, 75); guard.closeSubpath()
+            painter.setBrush(QColor("#F8FAFC")); painter.drawPath(guard)
+            painter.setBrush(QColor("#475569")); painter.drawRoundedRect(60, 80, 8, 29, 3, 3)
+            painter.setBrush(QColor("#CBD5E1")); painter.drawEllipse(57, 104, 14, 14)
+        else:
+            shield = QPainterPath(); shield.moveTo(64, 12); shield.cubicTo(80, 22, 96, 27, 109, 29)
+            shield.lineTo(107, 67); shield.cubicTo(106, 88, 88, 105, 64, 117)
+            shield.cubicTo(40, 105, 22, 88, 21, 67); shield.lineTo(19, 29)
+            shield.cubicTo(32, 27, 48, 22, 64, 12); shield.closeSubpath()
+            painter.setBrush(QColor("#172554" if state == "blue" else "#14251F"))
+            painter.setPen(QPen(accent, 6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)); painter.drawPath(shield)
+            if state == "green":
+                painter.setPen(QPen(QColor("#BBF7D0"), 7, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                painter.drawLine(43, 65, 57, 79); painter.drawLine(57, 79, 85, 49)
+        painter.end()
+        return QIcon(sprite)
 
     def set_signal(self, text: str, color: str):
-        colors = {"green": "#48d15b", "yellow": "#ffd54a", "red": "#ff5252", "blue": "#55aaff", "gray": "#a0a7a0"}
-        icon = self.make_robot_icon(colors[color], color); self.signal_dot.setPixmap(icon.pixmap(26, 26)); self.signal_dot.setToolTip(f"Estado: {text}")
+        colors = {"green": "#60A5FA", "yellow": "#FBBF24", "red": "#FB7185", "blue": "#22D3EE", "gray": "#94A3B8"}
+        icon = self.make_security_icon(color); self.signal_dot.setPixmap(icon.pixmap(34, 34)); self.signal_dot.setToolTip(f"Estado: {text}")
         self.signal_text.setStyleSheet(f"color:{colors[color]}"); self.signal_text.setText(text)
         if self.tray: self.tray.setIcon(icon); self.tray.setToolTip(f"{APP_NAME} | {text}")
 
     def setup_tray(self):
         if not QSystemTrayIcon.isSystemTrayAvailable(): return
-        self.tray = QSystemTrayIcon(self.make_robot_icon("#a0a7a0", "gray"), self)
+        self.tray = QSystemTrayIcon(self.make_security_icon(), self)
         menu = QMenu(); show_action = QAction("Abrir WSAC", self); show_action.triggered.connect(self.restore_window); menu.addAction(show_action)
         collect_action = QAction("Coletar agora", self); collect_action.triggered.connect(self.start_collection); menu.addAction(collect_action)
         monitor_action = QAction("Iniciar / parar monitoramento", self); monitor_action.triggered.connect(self.toggle_monitor); menu.addAction(monitor_action)
@@ -972,11 +1061,11 @@ class MainWindow(QMainWindow):
     @staticmethod
     def level_style(level: str):
         value = (level or "").upper()
-        if value in {"CRÍTICO", "CRITICAL", "ERRO", "ERROR"}: return "◆", QColor("#ff6b6b"), "CRÍTICO"
-        if value in {"ALTO", "WARNING", "AVISO"}: return "▲", QColor("#ffad66"), "ALTO"
-        if value in {"MÉDIO", "MEDIO"}: return "●", QColor("#ffe066"), "MÉDIO"
-        if value in {"INFORMATIVO", "INFORMATION", "INFORMAÇÕES", "INFORMACAO", "INFORMAÇÃO"}: return "■", QColor("#74b9ff"), "INFORMATIVO"
-        return "◇", QColor("#c4f7c4"), value or "SEM NÍVEL"
+        if value in {"CRÍTICO", "CRITICAL", "ERRO", "ERROR"}: return "◆", QColor("#FB7185"), "CRÍTICO"
+        if value in {"ALTO", "WARNING", "AVISO"}: return "▲", QColor("#F97316"), "ALTO"
+        if value in {"MÉDIO", "MEDIO"}: return "●", QColor("#FBBF24"), "MÉDIO"
+        if value in {"INFORMATIVO", "INFORMATION", "INFORMAÇÕES", "INFORMACAO", "INFORMAÇÃO"}: return "■", QColor("#60A5FA"), "INFORMATIVO"
+        return "◇", QColor("#DCE6F3"), value or "SEM NÍVEL"
 
     @staticmethod
     def put_row(table, row, values, color=None):
@@ -1003,7 +1092,7 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(f"{key} ({counts[key]})"); item.setData(Qt.UserRole, key)
             category_records = [record for record in records if str(record[category_field] or "Sem classificação") == key]
             if category_records and all("state" in record.keys() and record["state"] in {"resolvido", "ignorado"} for record in category_records):
-                font = item.font(); font.setStrikeOut(True); item.setFont(font); item.setForeground(QColor("#789278"))
+                font = item.font(); font.setStrikeOut(True); item.setFont(font); item.setForeground(QColor("#94A3B8"))
             widget.addItem(item)
         target = 0
         if selected:
@@ -1084,13 +1173,14 @@ class MainWindow(QMainWindow):
         self.status_table.setSortingEnabled(False); self.status_table.setRowCount(0)
         for row, record in enumerate(self.db.current_status()):
             state = record["state"] or ""; low = state.lower()
-            symbol, color = ("◆", QColor("#ff6b6b")) if low in {"stopped", "inativo", "parado"} else (("●", QColor("#ffe066")) if low in {"não encontrado", "indisponível"} else ("■", QColor("#72df72")))
+            symbol, color = ("◆", QColor("#FB7185")) if low in {"stopped", "inativo", "parado"} else (("●", QColor("#FBBF24")) if low in {"não encontrado", "indisponível"} else ("■", QColor("#60A5FA")))
             self.put_row(self.status_table, row, [symbol, record["component"], state, display_datetime(record["observed_at"]), record["details"] or ""], color)
         self.status_table.setSortingEnabled(True); self.history_table.setSortingEnabled(False); self.history_table.setRowCount(0)
         for row, record in enumerate(self.db.history()):
             _symbol, color, _label = self.level_style("MÉDIO" if record["previous_state"] != record["current_state"] else "INFORMATIVO")
             self.put_row(self.history_table, row, [display_datetime(record["observed_at"]), record["component"], record["previous_state"], record["current_state"], record["details"] or ""], color)
         self.history_table.setSortingEnabled(True)
+        self.refresh_home()
 
     def show_alert(self, index):
         self.render_continuous("alerts")
@@ -1111,13 +1201,9 @@ class MainWindow(QMainWindow):
         self.db.close(); event.accept()
 
 
-def apply_palette(app):
-    palette = QPalette(); palette.setColor(QPalette.Window, QColor("#050805")); palette.setColor(QPalette.WindowText, QColor("#c4f7c4")); palette.setColor(QPalette.Base, QColor("#020402")); palette.setColor(QPalette.Text, QColor("#c4f7c4")); palette.setColor(QPalette.Highlight, QColor("#285b28")); palette.setColor(QPalette.HighlightedText, QColor("#fff")); app.setPalette(palette)
-
-
 def main() -> int:
     if os.name != "nt": raise SystemExit("Este aplicativo foi desenvolvido para Windows.")
-    app = QApplication(sys.argv); app.setApplicationName(APP_NAME); app.setStyle("Fusion"); apply_palette(app); app.setStyleSheet(STYLE)
+    app = QApplication(sys.argv); app.setApplicationName(APP_NAME); app.setStyle("Fusion"); apply_palette(app, QPalette, QColor); app.setStyleSheet(STYLE)
     window = MainWindow(); window.show(); return app.exec()
 
 
