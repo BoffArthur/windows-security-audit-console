@@ -8,7 +8,7 @@ Aplicativo desktop local de auditoria e acompanhamento de segurança do Windows.
 
 - Windows (coleta via PowerShell / Event Log)
 - Python 3.x
-- `pip install PySide6`
+- `pip install -r requirements.txt` (ver `requirements.txt` para a lista completa)
 
 ## Funcionalidades
 
